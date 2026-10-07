@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Moonlight — batch downloader</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌙</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --sky:#161a33; --sky-2:#1e2343; --sky-3:#2a3058; --line:#343b6b;
+  --moon:#efe8cf; --text:#e6e8f5; --dust:#9aa0c3;
+  --dn:#7fb3ff; --ff:#f2a65a; --direct:#9fdcb4; --bad:#ff8a8a;
+  --serif:"Instrument Serif",Georgia,serif;
+  --sans:"Manrope",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:dark;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:light){
+  :root:not([data-theme="dark"]){
+    --sky:#eef0f7; --sky-2:#ffffff; --sky-3:#e2e5f1; --line:#cfd3e6;
+    --moon:#3b3f6b; --text:#1c2040; --dust:#5d6388;
+    --dn:#2f6fd6; --ff:#c26a14; --direct:#2c8a52; --bad:#c43c3c;
+    color-scheme:light;
+  }
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--sky);color:var(--text);font:15px/1.5 var(--sans);min-height:100vh}
+button,input,textarea,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--dn);outline-offset:2px}
+.wrap{max-width:1240px;margin:0 auto;padding:28px 20px 60px;display:grid;grid-template-columns:minmax(300px,400px) 1fr;gap:28px}
+@media (max-width:860px){.wrap{grid-template-columns:1fr}}
+
+header.brand{grid-column:1/-1;display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+header.brand h1{font:400 44px/1 var(--serif);margin:0;color:var(--moon);letter-spacing:-.01em}
+header.brand p{margin:0;color:var(--dust);max-width:60ch}
+
+.panel{background:var(--sky-2);border:1px solid var(--line);border-radius:14px}
+.side{padding:18px;display:flex;flex-direction:column;gap:18px;align-self:start}
+.side h2,.main h2{font:600 15px/1.2 var(--sans);margin:0 0 8px}
+.hint{color:var(--dust);font-size:13px;margin:6px 0 0}
+
+.drop{position:relative}
+textarea{width:100%;min-height:200px;resize:vertical;background:var(--sky);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.6;white-space:pre;overflow-wrap:normal;overflow-x:auto}
+.drop.over textarea{border-color:var(--dn);border-style:dashed}
+.split{display:flex;gap:12px;flex-wrap:wrap;font-size:13px;margin-top:8px}
+.split b{font-weight:700}
+.c-dn{color:var(--dn)} .c-ff{color:var(--ff)} .c-direct{color:var(--direct)}
+
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:var(--sky-3);border-radius:9px;padding:8px 13px;cursor:pointer;font-weight:600;font-size:14px}
+.btn:hover{border-color:var(--dust)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.primary{background:var(--moon);color:var(--sky);border-color:var(--moon)}
+.btn.ghost{background:transparent}
+kbd{font:600 11px var(--sans);border:1px solid var(--line);border-radius:4px;padding:0 5px;margin-left:6px;opacity:.75}
+
+.settings{display:grid;grid-template-columns:1fr auto;gap:10px 12px;align-items:center;font-size:14px}
+.settings input[type=number]{width:84px;background:var(--sky);border:1px solid var(--line);border-radius:8px;padding:5px 8px}
+.settings select{background:var(--sky);border:1px solid var(--line);border-radius:8px;padding:5px 8px}
+.settings label{color:var(--text)}
+.settings small{display:block;color:var(--dust);font-size:12px}
+
+.main{display:flex;flex-direction:column;gap:20px;min-width:0}
+.hero{padding:22px;display:flex;gap:26px;align-items:center;flex-wrap:wrap}
+.moon{width:132px;height:132px;flex:none}
+.moon .disc{fill:var(--sky-3)}
+.moon .lit{fill:var(--moon);transition:none}
+.figure{font:400 64px/1 var(--serif);color:var(--moon)}
+.figure small{font:500 15px var(--sans);color:var(--dust);margin-left:6px}
+.facts{display:flex;gap:22px;flex-wrap:wrap;color:var(--dust);font-size:13px;margin-top:8px}
+.facts b{color:var(--text);font-weight:600}
+.lane{margin-left:auto;display:flex;flex-direction:column;gap:8px;min-width:220px}
+.lane .now{font-size:13px;color:var(--dust);max-width:34ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.queue{padding:16px 18px}
+.qhead{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.qhead h2{margin:0;margin-right:auto}
+.qhead input{background:var(--sky);border:1px solid var(--line);border-radius:8px;padding:5px 9px;width:180px}
+.chips{display:flex;gap:6px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:12px;cursor:pointer;background:transparent}
+.chip[aria-pressed=true]{background:var(--sky-3);border-color:var(--dust)}
+ul.items{list-style:none;margin:0;padding:0;max-height:460px;overflow:auto}
+ul.items li{display:grid;grid-template-columns:auto 1fr auto auto;gap:12px;align-items:center;padding:9px 4px;border-top:1px solid var(--line);font-size:14px}
+ul.items li:first-child{border-top:0}
+.host{font-size:11px;font-weight:700;border-radius:5px;padding:2px 7px;border:1px solid currentColor;white-space:nowrap}
+.name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.name a{color:inherit;text-decoration:none}
+.name a:hover{text-decoration:underline}
+.state{font-size:12px;color:var(--dust);white-space:nowrap}
+li.s-sent .name,li.s-opened .name,li.s-skipped .name{color:var(--dust)}
+li.s-active .name{font-weight:700}
+li.s-active .state{color:var(--moon)}
+li.s-blocked .state{color:var(--bad)}
+.mini{border:0;background:transparent;color:var(--dust);cursor:pointer;font-size:12px;padding:2px 6px;border-radius:6px}
+.mini:hover{background:var(--sky-3);color:var(--text)}
+.empty{color:var(--dust);padding:22px 4px;font-size:14px}
+
+.log{padding:14px 18px}
+.log pre{margin:0;max-height:180px;overflow:auto;font:12px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--dust);white-space:pre-wrap}
+.log pre .e{color:var(--bad)} .log pre .ok{color:var(--direct)}
+
+details.about{grid-column:1/-1;color:var(--dust);font-size:14px}
+details.about summary{cursor:pointer;color:var(--text);font-weight:600}
+details.about p,details.about li{max-width:78ch}
+details.about code{background:var(--sky-3);padding:1px 5px;border-radius:4px;font-size:13px}
+
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--moon);color:var(--sky);padding:9px 16px;border-radius:9px;font-weight:600;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.show{opacity:1}
+@media (prefers-reduced-motion:reduce){.toast{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="brand">
+    <h1>Moonlight</h1>
+    <p>Paste links and let the queue run. Direct file links download on their own; host pages open one by one for you to finish.</p>
+  </header>
+
+  <!-- ===== Left: input & settings ===== -->
+  <aside class="panel side">
+    <section>
+      <h2>Links</h2>
+      <div class="drop" id="drop">
+        <textarea id="links" spellcheck="false" placeholder="One link per line, or drop a .txt here&#10;&#10;https://fuckingfast.co/abc123#file.part01.rar&#10;https://datanodes.to/xyz789/file.part02.rar&#10;https://example.com/files/archive.zip"></textarea>
+      </div>
+      <div class="split" id="split" aria-live="polite"></div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn ghost" id="loadBtn" title="Load a .txt file (Ctrl+O)">Load .txt</button>
+        <button class="btn ghost" id="shareBtn" title="Copy a link to this page with the list built in">Copy page link</button>
+        <button class="btn ghost" id="clearBtn">Clear</button>
+        <input type="file" id="fileInput" accept=".txt,text/plain" hidden>
+      </div>
+    </section>
+
+    <section>
+      <h2>Settings</h2>
+      <div class="settings">
+        <label for="gap">Gap between downloads<small>seconds, direct links</small></label>
+        <input type="number" id="gap" min="0.5" max="60" step="0.5" value="2">
+        <label for="method">Download through<small>hidden frame keeps you on this page</small></label>
+        <select id="method"><option value="frame">Hidden frame</option><option value="tab">New tab</option></select>
+        <label for="batch">Pages per batch<small>needs pop-ups allowed</small></label>
+        <input type="number" id="batch" min="1" max="20" step="1" value="4">
+        <label for="dedupe">Skip duplicate links</label>
+        <input type="checkbox" id="dedupe" checked>
+      </div>
+    </section>
+
+    <button class="btn primary" id="startBtn">Start queue <kbd>Ctrl ↵</kbd></button>
+  </aside>
+
+  <!-- ===== Right: progress, queue, log ===== -->
+  <main class="main">
+    <section class="panel hero">
+      <svg class="moon" viewBox="0 0 120 120" aria-hidden="true">
+        <defs><mask id="phase"><rect width="120" height="120" fill="#fff"/><circle id="shadow" cx="60" cy="60" r="52" fill="#000"/></mask></defs>
+        <circle class="disc" cx="60" cy="60" r="52"/>
+        <circle class="lit" cx="60" cy="60" r="52" mask="url(#phase)"/>
+      </svg>
+      <div>
+        <div class="figure" id="figure">0<small>of 0 handled</small></div>
+        <div class="facts">
+          <span>Direct <b id="fDirect">0/0</b></span>
+          <span>Pages <b id="fPages">0/0</b></span>
+          <span>Elapsed <b id="fTime">0:00</b></span>
+        </div>
+      </div>
+      <div class="lane">
+        <button class="btn" id="pauseBtn" disabled>Pause downloads</button>
+        <button class="btn" id="nextBtn" disabled>Open next page <kbd>N</kbd></button>
+        <button class="btn ghost" id="batchBtn" disabled>Open next batch</button>
+        <div class="now" id="now">Idle</div>
+      </div>
+    </section>
+
+    <section class="panel queue">
+      <div class="qhead">
+        <h2>Queue</h2>
+        <div class="chips" role="group" aria-label="Filter by state">
+          <button class="chip" data-f="all" aria-pressed="true">All</button>
+          <button class="chip" data-f="left" aria-pressed="false">Left</button>
+          <button class="chip" data-f="done" aria-pressed="false">Done</button>
+        </div>
+        <input type="search" id="filter" placeholder="Filter  /" aria-label="Filter by name">
+        <button class="btn ghost" id="copyLeft" title="Copy every link not yet handled">Copy remaining</button>
+      </div>
+      <ul class="items" id="items"></ul>
+    </section>
+
+    <section class="panel log">
+      <h2>Log</h2>
+      <pre id="log" aria-live="polite"></pre>
+    </section>
+  </main>
+
+  <details class="about">
+    <summary>How this works, and loading a list from your repo</summary>
+    <p>Links are sorted into two lanes. <b>Direct links</b> (any normal file URL, <code>fuckingfast.co/dl/…</code>, or the <code>output_links.txt</code> Moon Downloader writes in links-only mode) are fetched one at a time through a hidden frame. Your browser will ask once to allow multiple downloads; say yes. <b>Host pages</b> (<code>datanodes.to/…</code>, <code>fuckingfast.co/&lt;id&gt;</code>) need a person to clear their check, so they open in new tabs when you press <b>N</b> or <b>Open next batch</b>.</p>
+    <p>A static page can't watch a download once the browser takes it, so "sent" means handed to the browser, not finished. Check your downloads bar for failures and use <b>Copy remaining</b> to requeue.</p>
+    <p>URL options:</p>
+    <ul>
+      <li><code>?list=links.txt</code> loads a text file next to this page in your repo (or any URL that allows cross-origin reads, such as <code>raw.githubusercontent.com</code>).</li>
+      <li><code>&amp;auto=1</code> starts the direct lane as soon as the list loads.</li>
+      <li><code>#l=…</code> is what <b>Copy page link</b> produces: the list packed into the address itself, never sent to any server.</li>
+    </ul>
+  </details>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(() => {
+  "use strict";
+  const $ = id => document.getElementById(id);
+  const els = {
+    links:$("links"), split:$("split"), drop:$("drop"), fileInput:$("fileInput"),
+    gap:$("gap"), method:$("method"), batch:$("batch"), dedupe:$("dedupe"),
+    start:$("startBtn"), pause:$("pauseBtn"), next:$("nextBtn"), batchBtn:$("batchBtn"),
+    now:$("now"), items:$("items"), log:$("log"), filter:$("filter"),
+    figure:$("figure"), fDirect:$("fDirect"), fPages:$("fPages"), fTime:$("fTime"),
+    shadow:$("shadow"), toast:$("toast")
+  };
+
+  /* ---------- storage (per-viewer convenience only) ---------- */
+  const store = {
+    get(k, d){ try { const v = localStorage.getItem("moonlight:"+k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+    set(k, v){ try { localStorage.setItem("moonlight:"+k, JSON.stringify(v)); } catch {} }
+  };
+
+  /* ---------- classification ---------- */
+  const HOSTS = {
+    dn:     { label:"datanodes",    cls:"c-dn" },
+    ff:     { label:"fuckingfast",  cls:"c-ff" },
+    direct: { label:"direct",       cls:"c-direct" }
+  };
+  function classify(raw){
+    let u;
+    try { u = new URL(raw.trim()); } catch { return null; }
+    if (!/^https?:$/.test(u.protocol)) return null;
+    const h = u.hostname.replace(/^www\./, "");
+    let host = "direct", kind = "direct";
+    if (h === "datanodes.to" || h.endsWith(".datanodes.to")) { host = "dn"; kind = "page"; }
+    else if (h === "fuckingfast.co" || h.endsWith(".fuckingfast.co")) {
+      host = "ff";
+      kind = u.pathname.startsWith("/dl/") ? "direct" : "page";
+    }
+    return { url:u.href, host, kind, name:nameOf(u) };
+  }
+  function nameOf(u){
+    if (u.hash.length > 1) { try { return decodeURIComponent(u.hash.slice(1)); } catch { return u.hash.slice(1); } }
+    const parts = u.pathname.split("/").filter(Boolean);
+    const last = parts[parts.length-1];
+    if (last && /\.[a-z0-9]{1,6}$/i.test(last)) { try { return decodeURIComponent(last); } catch { return last; } }
+    return u.hostname + u.pathname;
+  }
+  function parseList(text){
+    const seen = new Set(), out = [];
+    for (const line of text.split(/\r?\n/)) {
+      const t = line.trim();
+      if (!t || t.startsWith("#")) continue;
+      const c = classify(t);
+      if (!c) continue;
+      if (els.dedupe.checked) { if (seen.has(c.url)) continue; seen.add(c.url); }
+      out.push(c);
+    }
+    return out;
+  }
+
+  /* ---------- state ---------- */
+  let items = [];          // {id,url,host,kind,name,state}
+  let running = false, paused = false, timer = null, startedAt = 0, tick = null;
+  let filterMode = "all";
+
+  /* ---------- log ---------- */
+  function log(msg, cls){
+    const t = new Date().toTimeString().slice(0,8);
+    const line = document.createElement("span");
+    if (cls) line.className = cls;
+    line.textContent = `${t}  ${msg}\n`;
+    els.log.appendChild(line);
+    while (els.log.childNodes.length > 2000) els.log.removeChild(els.log.firstChild);
+    els.log.scrollTop = els.log.scrollHeight;
+  }
+  function toast(msg){
+    els.toast.textContent = msg; els.toast.classList.add("show");
+    clearTimeout(toast._t); toast._t = setTimeout(() => els.toast.classList.remove("show"), 1800);
+  }
+
+  /* ---------- live split while typing ---------- */
+  function updateSplit(){
+    const list = parseList(els.links.value);
+    const n = { dn:0, ff:0, direct:0, pages:0, files:0 };
+    list.forEach(i => { n[i.host]++; i.kind === "page" ? n.pages++ : n.files++; });
+    els.split.innerHTML = list.length
+      ? `<span><b>${list.length}</b> links</span>
+         <span class="c-dn"><b>${n.dn}</b> datanodes</span>
+         <span class="c-ff"><b>${n.ff}</b> fuckingfast</span>
+         <span class="c-direct"><b>${n.direct}</b> other</span>
+         <span>${n.files} download directly, ${n.pages} need you</span>`
+      : `<span style="color:var(--dust)">No links yet</span>`;
+    store.set("links", els.links.value);
+  }
+
+  /* ---------- rendering ---------- */
+  const STATE_TEXT = {
+    queued:"queued", active:"sending…", sent:"sent to browser",
+    waiting:"waiting for you", opened:"opened in tab", blocked:"pop-up blocked", skipped:"skipped"
+  };
+  const isDone = s => s === "sent" || s === "opened" || s === "skipped";
+
+  function render(){
+    const q = els.filter.value.trim().toLowerCase();
+    const frag = document.createDocumentFragment();
+    let shown = 0;
+    for (const it of items) {
+      if (filterMode === "left" && isDone(it.state)) continue;
+      if (filterMode === "done" && !isDone(it.state)) continue;
+      if (q && !it.name.toLowerCase().includes(q) && !it.url.toLowerCase().includes(q)) continue;
+      shown++;
+      const li = document.createElement("li");
+      li.className = "s-" + it.state;
+      const h = HOSTS[it.host];
+      li.innerHTML = `<span class="host ${h.cls}">${h.label}</span>
+        <span class="name"><a target="_blank" rel="noopener noreferrer"></a></span>
+        <span class="state">${STATE_TEXT[it.state]}</span>
+        <button class="mini" data-act="${isDone(it.state) ? "redo" : "go"}" data-id="${it.id}">${isDone(it.state) ? "Again" : (it.kind === "page" ? "Open" : "Get")}</button>`;
+      const a = li.querySelector("a"); a.href = it.url; a.textContent = it.name; a.title = it.url;
+      frag.appendChild(li);
+    }
+    els.items.replaceChildren(frag);
+    if (!shown) {
+      const li = document.createElement("li");
+      li.className = "empty"; li.style.display = "block";
+      li.textContent = items.length ? "Nothing matches this filter." : "Paste links on the left and press Start queue.";
+      els.items.appendChild(li);
+    }
+    renderStats();
+  }
+
+  function renderStats(){
+    const direct = items.filter(i => i.kind === "direct");
+    const pages = items.filter(i => i.kind === "page");
+    const dDone = direct.filter(i => isDone(i.state)).length;
+    const pDone = pages.filter(i => isDone(i.state)).length;
+    const done = dDone + pDone, total = items.length;
+    els.figure.innerHTML = `${done}<small>of ${total} handled</small>`;
+    els.fDirect.textContent = `${dDone}/${direct.length}`;
+    els.fPages.textContent = `${pDone}/${pages.length}`;
+    // moon phase: shadow slides off as the queue empties
+    const p = total ? done / total : 0;
+    els.shadow.setAttribute("cx", String(60 + p * 108));
+    const leftPages = pages.some(i => !isDone(i.state));
+    els.next.disabled = !leftPages;
+    els.batchBtn.disabled = !leftPages;
+    els.pause.disabled = !running;
+    els.pause.textContent = paused ? "Resume downloads" : "Pause downloads";
+    document.title = total ? `${done}/${total} · Moonlight` : "Moonlight — batch downloader";
+  }
+
+  /* ---------- download lane (direct links) ---------- */
+  function fire(it){
+    if (els.method.value === "tab") {
+      const w = window.open(it.url, "_blank");
+      if (!w) { it.state = "blocked"; log(`pop-up blocked: ${it.name}`, "e"); return false; }
+      try { w.opener = null; } catch {}
+    } else {
+      const f = document.createElement("iframe");
+      f.style.display = "none";
+      f.setAttribute("aria-hidden", "true");
+      f.src = it.url;
+      document.body.appendChild(f);
+      setTimeout(() => f.remove(), 120000);
+    }
+    return true;
+  }
+
+  function pump(){
+    clearTimeout(timer);
+    if (!running || paused) return;
+    const it = items.find(i => i.kind === "direct" && (i.state === "queued"));
+    if (!it) {
+      const pagesLeft = items.some(i => i.kind === "page" && !isDone(i.state));
+      els.now.textContent = pagesLeft ? "Direct lane done. Press N for the next page." : "All handled.";
+      log("direct lane finished", "ok");
+      running = false; renderStats();
+      return;
+    }
+    it.state = "active"; render();
+    els.now.textContent = "Sending " + it.name;
+    const ok = fire(it);
+    if (ok) { it.state = "sent"; log(`sent  ${it.name}`); }
+    render();
+    const gap = Math.min(60, Math.max(0.5, parseFloat(els.gap.value) || 2));
+    timer = setTimeout(pump, gap * 1000);
+  }
+
+  /* ---------- page lane (needs a person) ---------- */
+  function openPage(it){
+    const w = window.open(it.url, "_blank");
+    if (!w) {
+      it.state = "blocked";
+      log(`pop-up blocked: ${it.name}. Allow pop-ups for this site, then try again.`, "e");
+      return false;
+    }
+    try { w.opener = null; } catch {}
+    it.state = "opened";
+    log(`opened ${it.name}`);
+    return true;
+  }
+  function nextPages(n){
+    const left = items.filter(i => i.kind === "page" && !isDone(i.state));
+    let opened = 0;
+    for (const it of left.slice(0, n)) { if (openPage(it)) opened++; else break; }
+    const rest = items.filter(i => i.kind === "page" && !isDone(i.state)).length;
+    if (opened) els.now.textContent = rest ? `${rest} page${rest === 1 ? "" : "s"} left. Press N for the next.` : "Every page opened.";
+    render();
+  }
+
+  /* ---------- controls ---------- */
+  function start(){
+    const list = parseList(els.links.value);
+    if (!list.length) { toast("Add at least one link"); els.links.focus(); return; }
+    items = list.map((c, i) => ({ ...c, id:i, state: c.kind === "page" ? "waiting" : "queued" }));
+    running = true; paused = false; startedAt = Date.now();
+    clearInterval(tick); tick = setInterval(() => {
+      const s = Math.floor((Date.now() - startedAt) / 1000);
+      els.fTime.textContent = `${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;
+    }, 1000);
+    const files = items.filter(i => i.kind === "direct").length;
+    const pages = items.length - files;
+    log(`queue started: ${files} direct, ${pages} pages`);
+    els.start.textContent = "Restart queue";
+    render();
+    if (files) pump(); else { running = false; els.now.textContent = "Press N to open the first page."; renderStats(); }
+  }
+
+  els.start.addEventListener("click", start);
+  els.pause.addEventListener("click", () => {
+    paused = !paused;
+    log(paused ? "paused" : "resumed");
+    if (!paused) pump(); else els.now.textContent = "Paused";
+    renderStats();
+  });
+  els.next.addEventListener("click", () => nextPages(1));
+  els.batchBtn.addEventListener("click", () => nextPages(Math.max(1, Math.min(20, parseInt(els.batch.value) || 4))));
+
+  els.items.addEventListener("click", e => {
+    const b = e.target.closest("button.mini"); if (!b) return;
+    const it = items.find(i => i.id === +b.dataset.id); if (!it) return;
+    if (it.kind === "page") openPage(it);
+    else if (fire(it)) { it.state = "sent"; log(`sent  ${it.name}`); }
+    render();
+  });
+
+  document.querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => {
+    filterMode = c.dataset.f;
+    document.querySelectorAll(".chip").forEach(x => x.setAttribute("aria-pressed", String(x === c)));
+    render();
+  }));
+  els.filter.addEventListener("input", render);
+
+  $("copyLeft").addEventListener("click", async () => {
+    const left = items.filter(i => !isDone(i.state)).map(i => i.url).join("\n");
+    if (!left) { toast("Nothing left to copy"); return; }
+    try { await navigator.clipboard.writeText(left); toast("Remaining links copied"); }
+    catch { els.links.value = left; updateSplit(); toast("Put the remaining links back in the box"); }
+  });
+
+  /* ---------- loading links ---------- */
+  function appendText(text, source){
+    const cur = els.links.value.trim();
+    els.links.value = cur ? cur + "\n" + text.trim() : text.trim();
+    updateSplit();
+    log(`loaded ${source}`);
+  }
+  $("loadBtn").addEventListener("click", () => els.fileInput.click());
+  els.fileInput.addEventListener("change", async () => {
+    const f = els.fileInput.files[0]; if (!f) return;
+    appendText(await f.text(), f.name); els.fileInput.value = "";
+  });
+  $("clearBtn").addEventListener("click", () => { els.links.value = ""; updateSplit(); els.links.focus(); });
+  els.links.addEventListener("input", updateSplit);
+
+  ["dragenter","dragover"].forEach(ev => document.addEventListener(ev, e => { e.preventDefault(); els.drop.classList.add("over"); }));
+  ["dragleave","drop"].forEach(ev => document.addEventListener(ev, e => { e.preventDefault(); if (ev === "drop" || e.target === document.documentElement) els.drop.classList.remove("over"); }));
+  document.addEventListener("drop", async e => {
+    const files = [...(e.dataTransfer?.files || [])];
+    if (files.length) { for (const f of files) appendText(await f.text(), f.name); return; }
+    const t = e.dataTransfer?.getData("text/plain"); if (t) appendText(t, "dropped text");
+  });
+
+  /* ---------- share link (#l=) ---------- */
+  const b64enc = s => btoa(String.fromCharCode(...new TextEncoder().encode(s))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+  const b64dec = s => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/-/g,"+").replace(/_/g,"/")), c => c.charCodeAt(0)));
+  $("shareBtn").addEventListener("click", async () => {
+    const list = parseList(els.links.value).map(i => i.url).join("\n");
+    if (!list) { toast("Add links first"); return; }
+    const url = location.origin + location.pathname + "#l=" + b64enc(list);
+    try { await navigator.clipboard.writeText(url); toast("Page link copied"); }
+    catch { prompt("Copy this link:", url); }
+  });
+
+  /* ---------- settings persistence ---------- */
+  const SETTINGS = ["gap","method","batch","dedupe"];
+  SETTINGS.forEach(k => {
+    const el = els[k], v = store.get(k, null);
+    if (v != null) el.type === "checkbox" ? (el.checked = v) : (el.value = v);
+    el.addEventListener("change", () => { store.set(k, el.type === "checkbox" ? el.checked : el.value); updateSplit(); });
+  });
+
+  /* ---------- keyboard ---------- */
+  document.addEventListener("keydown", e => {
+    const typing = /^(TEXTAREA|INPUT|SELECT)$/.test(document.activeElement.tagName);
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); start(); return; }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "o") { e.preventDefault(); els.fileInput.click(); return; }
+    if (typing) { if (e.key === "Escape") document.activeElement.blur(); return; }
+    if (e.key === "/") { e.preventDefault(); els.filter.focus(); }
+    else if (e.key.toLowerCase() === "n" && !els.next.disabled) nextPages(1);
+    else if (e.key.toLowerCase() === "b" && !els.batchBtn.disabled) els.batchBtn.click();
+  });
+
+  /* ---------- boot: hash, ?list=, saved links ---------- */
+  (async function boot(){
+    const params = new URLSearchParams(location.search);
+    const auto = params.get("auto") === "1";
+    let loaded = false;
+    if (location.hash.startsWith("#l=")) {
+      try { els.links.value = b64dec(location.hash.slice(3)); loaded = true; log("loaded list from page link"); }
+      catch { log("the list in this page link is damaged", "e"); }
+    }
+    const src = params.get("list");
+    if (!loaded && src) {
+      try {
+        const r = await fetch(new URL(src, location.href), { cache:"no-store" });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        els.links.value = await r.text(); loaded = true;
+        log(`loaded ${src}`);
+      } catch (err) {
+        log(`couldn't load ${src}: ${err.message}. The file must sit in this repo or allow cross-origin reads.`, "e");
+      }
+    }
+    if (!loaded) els.links.value = store.get("links", "");
+    updateSplit(); render();
+    if (loaded && auto) {
+      log("auto-start requested");
+      start();
+    }
+  })();
+})();
+</script>
+</body>
+</html>
